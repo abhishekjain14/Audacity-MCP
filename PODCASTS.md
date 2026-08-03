@@ -23,14 +23,23 @@ A podcast or interview recording is usually edited by working through it segment
 - **`label_find(query)`** — case-insensitive text search, for jumping straight to "the part where they mention the sponsor" in a long transcript.
 - **`label_get_all`** — Audacity's raw `GetInfo` response, if you need the unparsed form for some reason. Prefer `label_list`.
 
-### 3. Edit the label track itself
+### 3. Decide what to cut, and mark it on its own track
+
+This is the step between "read the transcript" and "act on it" — deciding what needs to go, and recording that decision *without* touching the transcript track itself:
+
+- **Import into Audacity** — typically done directly in the Audacity UI (open the project, import the recording) rather than through a tool call, though `project_import_audio(path)` exists if you're driving the import through Claude instead. `[Screenshot: Audacity after importing the recorded audio]`
+- **Generate the transcript** — covered above in step 1 (`transcribe_to_labels`, or `transcribe_to_file` + `label_import`). `[Screenshot: the resulting dense transcript label track]`
+- **Decide what needs to be cut** — a judgment call: the user's, Claude's (reading through the transcript for filler, dead air, off-topic tangents), or both together, often aided by `label_find` to jump straight to a known phrase. `[Screenshot: a decision being identified — e.g. a flagged section in the transcript]`
+- **Mark the decided cuts on a new label track** — `track_add_label` creates and focuses a brand-new, empty label track, then `label_add_at`/`label_add_batch` places one label per planned cut on it. This keeps the "what's getting cut" list as its own track, entirely separate from the dense transcript track underneath it. `[Screenshot: the new marker track with cut regions labeled, alongside the transcript track]`
+
+### 4. Edit the label track itself
 
 - **`label_edit(index, text=, start=, end=)`** — rename a label or nudge a boundary; only the fields you pass change.
 - **`label_add`** / **`label_add_at(start, end, text=)`** — add one label, at the cursor/selection or at an explicit time range.
 - **`label_add_batch(labels)`** — add a whole marker list in one call (up to 500), validated up front so a bad entry can't leave a half-written list behind.
 - **`label_regular_intervals`** — evenly spaced labels, for a different kind of segmentation (e.g. chaptering a continuous mix with no natural pauses).
 
-### 4. Remove a segment — three different operations, pick by scope
+### 5. Remove a segment — three different operations, pick by scope
 
 This is the part most likely to be reached for wrong, since the names are close:
 
@@ -45,7 +54,13 @@ This is the part most likely to be reached for wrong, since the names are close:
 
 For bulk cleanup — "remove every label I marked as a bad take" — loop `label_delete_audio_at` over the indices (highest index first, so earlier deletions don't shift the ones still queued), or select the relevant tracks/time range and use `label_delete_regions` to remove everything caught in the selection at once.
 
-### 5. Get the labeled work back out
+The reason `label_delete_audio_at` selects every track — the transcript track included, not just the audio tracks — is what makes it different from just reaching for a built-in Audacity command directly:
+
+`[Screenshot: result of executing the cut with a generic/built-in tool (e.g. label_delete_regions, or a plain region delete without every track selected) — transcript labels left stale, unshifted, still describing audio that's no longer there]`
+
+`[Screenshot: result of executing the same cut with label_delete_audio_at — transcript labels correctly shifted/removed, back in sync with the audio]`
+
+### 6. Get the labeled work back out
 
 - **`label_export_chapters(path, format=)`** — labels as a chapter/marker file: `"simple"` (`HH:MM:SS.mmm Title` per line), `"cue"` (cue sheet), or `"podlove"` (Podlove Simple Chapters JSON, the format most podcast hosts accept directly). Untitled labels become "Chapter 1", "Chapter 2", etc.
 - **`label_export_audio_segments(directory, format=, num_channels=)`** — exports the audio under each label as its own file (`01_Segment_Title.wav`, …), for pulling a single labeled quote or shipping per-segment files. Point labels (no width) are skipped; existing files are never overwritten; capped at 100 segments per call.
